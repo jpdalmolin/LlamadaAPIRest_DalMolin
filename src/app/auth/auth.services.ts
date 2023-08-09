@@ -1,6 +1,6 @@
 import { BehaviorSubject, Observable, map, take } from "rxjs";
+import { HttpClient, HttpErrorResponse } from "@angular/common/http";
 
-import { HttpClient } from "@angular/common/http";
 import { Injectable } from "@angular/core";
 import { LoginPayload } from "./models";
 import { NotifierService } from "../core/notifier/notifier.service";
@@ -19,10 +19,15 @@ export class AuthService {
   ) {}
 
   isAuthenticated(): Observable<boolean> {
-    return this.authUser$.pipe(
-      take(1),
-      map((user) => !!user),
-    );
+    return this.httpClient.get<User[]>('http://localhost:3000/users', {
+      params: {
+        token: localStorage.getItem('token') || '',
+      }
+    }).pipe(
+      map((usersResult) => {
+        return !!usersResult.length
+      })
+    )
   }
 
   login(payload: LoginPayload): void {
@@ -34,15 +39,29 @@ export class AuthService {
     }).subscribe({
       next: (response) => {
         if (response.length) {
+          const authUser = response[0];
           // LOGIN VALIDO
-          this._authUser$.next(response[0]);
+          this._authUser$.next(authUser);
           this.router.navigate(['/dashboard']);
+          localStorage.setItem('token', authUser.token);
         } else {
           // LOGIN INVALIDO
           this.notifier.showError('Email o contrasena invalida');
           this._authUser$.next(null);
         }
       },
+      error: (err) => {
+
+        if (err instanceof HttpErrorResponse) {
+          let message = 'Ocurrio un error inespeado';
+          if (err.status === 500) {
+          }
+          if (err.status === 401) {
+            message = 'Email o contrasena invalida';
+          }
+          this.notifier.showError(message)
+        }
+      }
     })
   }
 }
